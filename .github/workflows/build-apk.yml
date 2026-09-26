@@ -28,6 +28,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Pre-accept Android SDK licenses
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+        continue-on-error: true
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
