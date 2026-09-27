@@ -22,6 +22,56 @@ jobs:
       - name: Checkout official Winlator source
         run: git clone --recursive --depth 1 https://github.com/brunodev85/winlator.git winlator
 
+      - name: Cross-compile fresh Box64 from source
+        run: |
+          set -e
+          sudo apt-get update -y
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu zstd qemu-user-static
+
+          # ptitSeb/box64 main branch, six weeks ahead of our previously bundled
+          # v0.4.4 (built 2026-08-03), including PR #4377 (merged 2026-09-14)
+          # limiting mmap length on 39-bit-address-space platforms -- directly
+          # relevant since our own on-device box64 trace log shows "Didn't
+          # detect 48bits of address space, considering it's 39bits".
+          git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64-src
+          cd /tmp/box64-src
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+            -DARM64=ON -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          make -j"$(nproc)"
+          aarch64-linux-gnu-strip box64
+          file box64
+
+          echo "Sanity check: run the freshly built box64 under qemu-aarch64 emulation"
+          qemu-aarch64-static -L /usr/aarch64-linux-gnu ./box64 --version
+
+          # Package into the exact same tar layout Winlator's own TarCompressorUtils
+          # expects (./usr/local/bin/box64). File mode in the tar doesn't actually
+          # matter -- Winlator chmod's every extracted file to 0771 on extraction
+          # regardless -- but 755 is set anyway to keep the archive itself sane.
+          STAGE=/tmp/box64-stage
+          mkdir -p "$STAGE/usr/local/bin"
+          cp box64 "$STAGE/usr/local/bin/box64"
+          chmod 755 "$STAGE/usr/local/bin/box64"
+          cd "$STAGE"
+          tar --owner=bruno --group=bruno -cf /tmp/box64-new.tar ./usr
+          zstd -19 -f /tmp/box64-new.tar -o /tmp/box64-0.4.4-new.tzst
+
+          cd "$GITHUB_WORKSPACE"
+          ASSET="winlator/app/app/src/main/assets/box64/box64-0.4.4.tzst"
+          echo "Replacing bundled Box64 asset:"
+          ls -la "$ASSET"
+          cp /tmp/box64-0.4.4-new.tzst "$ASSET"
+          ls -la "$ASSET"
+
+          # DefaultVersion.BOX64 = "0.4.4" is a hardcoded string referenced by
+          # exact match elsewhere in Winlator's own Java code, so the asset
+          # filename/path is kept identical -- only the binary inside changes.
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -89,6 +139,9 @@ jobs:
       - name: Apply 0.23 WOW64 + BOX64_MMAP32 fix
         run: python3 scripts/patch_023_wow64_box64mmap.py
 
+      - name: Apply 0.24 Box64 rebuild version bump
+        run: python3 scripts/patch_024_box64_rebuild.py
+
       - name: Build ARM64 private APK
         working-directory: winlator/app
         run: |
@@ -96,13 +149,12 @@ jobs:
           ./gradlew --no-daemon assembleDebug
 
       - name: Rename APK
-        run: cp winlator/app/app/build/outputs/apk/debug/app-debug.apk HikariRO-Mobile-0.23-beta.apk
+        run: cp winlator/app/app/build/outputs/apk/debug/app-debug.apk HikariRO-Mobile-0.24-beta.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HikariRO-Mobile-0.23-beta
-          path: HikariRO-Mobile-0.23-beta.apk
+          name: HikariRO-Mobile-0.24-beta
+          path: HikariRO-Mobile-0.24-beta.apk
           if-no-files-found: error
           retention-days: 30
-
