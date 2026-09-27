@@ -86,6 +86,9 @@ jobs:
       - name: Apply 0.22 WINELOADER path fix
         run: python3 scripts/patch_022_wineloader_path.py
 
+      - name: Apply 0.23 WOW64 + BOX64_MMAP32 fix
+        run: python3 scripts/patch_023_wow64_box64mmap.py
+
       - name: Build ARM64 private APK
         working-directory: winlator/app
         run: |
@@ -93,12 +96,13 @@ jobs:
           ./gradlew --no-daemon assembleDebug
 
       - name: Rename APK
-        run: cp winlator/app/app/build/outputs/apk/debug/app-debug.apk HikariRO-Mobile-0.22-beta.apk
+        run: cp winlator/app/app/build/outputs/apk/debug/app-debug.apk HikariRO-Mobile-0.23-beta.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HikariRO-Mobile-0.22-beta
-          path: HikariRO-Mobile-0.22-beta.apk
+          name: HikariRO-Mobile-0.23-beta
+          path: HikariRO-Mobile-0.23-beta.apk
           if-no-files-found: error
           retention-days: 30
+
