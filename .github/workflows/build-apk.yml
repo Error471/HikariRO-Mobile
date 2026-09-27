@@ -22,19 +22,41 @@ jobs:
       - name: Checkout official Winlator source
         run: git clone --recursive --depth 1 https://github.com/brunodev85/winlator.git winlator
 
-      - name: Cross-compile fresh Box64 from source
+      - name: Cross-compile patched Box64 from source
         run: |
           set -e
           sudo apt-get update -y
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu zstd qemu-user-static
 
-          # ptitSeb/box64 main branch, six weeks ahead of our previously bundled
-          # v0.4.4 (built 2026-08-03), including PR #4377 (merged 2026-09-14)
-          # limiting mmap length on 39-bit-address-space platforms -- directly
-          # relevant since our own on-device box64 trace log shows "Didn't
-          # detect 48bits of address space, considering it's 39bits".
           git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64-src
           cd /tmp/box64-src
+
+          # 0.24 shipped a freshly cross-compiled but otherwise-stock upstream
+          # Box64 -- it ran (confirmed via qemu + on-device trace), but hit the
+          # *exact* same crash as the old bundled v0.4.4: dlsym(NULL,
+          # "wine_main_preload_info") returns NULL (Box64 never publishes that
+          # symbol -- this is not a bug that got fixed upstream, it's simply
+          # how Box64's own preloader substitute always works), so Wine's
+          # ntdll falls back to a fresh NtAllocateVirtualMemory at the fixed
+          # KUSER_SHARED_DATA address 0x7ffe0000 -- and that fails because it
+          # lands inside Box64's own hardcoded "WINE prereserve" range
+          # [0x7f000000, 0x82000000) (src/tools/wine_tools.c), which Box64
+          # reserves for itself as an approximation of what wine-preloader
+          # would normally reserve (per that file's own comment: "only the
+          # prereserve argument is reserved, not the other zone that
+          # wine-preloader reserve"). This patch shrinks that 3rd range so it
+          # ends right at 0x7ffe0000 instead of 0x82000000 -- freeing exactly
+          # the page ntdll needs, without touching the other two ranges.
+          echo "Before patch:"
+          grep -n "my_wine_reserve\[\]" src/tools/wine_tools.c
+          sed -i 's/0x7f000000, 0x03000000/0x7f000000, 0x00fe0000/' src/tools/wine_tools.c
+          echo "After patch:"
+          grep -n "my_wine_reserve\[\]" src/tools/wine_tools.c
+          if ! grep -q "0x7f000000, 0x00fe0000" src/tools/wine_tools.c; then
+            echo "ERROR: wine_tools.c patch did not apply as expected" >&2
+            exit 1
+          fi
+
           mkdir build && cd build
           cmake .. \
             -DCMAKE_SYSTEM_NAME=Linux \
@@ -46,7 +68,7 @@ jobs:
           aarch64-linux-gnu-strip box64
           file box64
 
-          echo "Sanity check: run the freshly built box64 under qemu-aarch64 emulation"
+          echo "Sanity check: run the freshly built (patched) box64 under qemu-aarch64 emulation"
           qemu-aarch64-static -L /usr/aarch64-linux-gnu ./box64 --version
 
           # Package into the exact same tar layout Winlator's own TarCompressorUtils
@@ -142,6 +164,9 @@ jobs:
       - name: Apply 0.24 Box64 rebuild version bump
         run: python3 scripts/patch_024_box64_rebuild.py
 
+      - name: Apply 0.25 Box64 prereserve shrink version bump
+        run: python3 scripts/patch_025_box64_prereserve_shrink.py
+
       - name: Build ARM64 private APK
         working-directory: winlator/app
         run: |
@@ -149,12 +174,12 @@ jobs:
           ./gradlew --no-daemon assembleDebug
 
       - name: Rename APK
-        run: cp winlator/app/app/build/outputs/apk/debug/app-debug.apk HikariRO-Mobile-0.24-beta.apk
+        run: cp winlator/app/app/build/outputs/apk/debug/app-debug.apk HikariRO-Mobile-0.25-beta.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HikariRO-Mobile-0.24-beta
-          path: HikariRO-Mobile-0.24-beta.apk
+          name: HikariRO-Mobile-0.25-beta
+          path: HikariRO-Mobile-0.25-beta.apk
           if-no-files-found: error
           retention-days: 30
