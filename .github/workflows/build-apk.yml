@@ -140,6 +140,22 @@ jobs:
           sudo mkdir -p "$(dirname "$INTERP_PATH")"
           sudo cp /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 "$INTERP_PATH"
           sudo cp /usr/aarch64-linux-gnu/lib/libc.so.6 /usr/aarch64-linux-gnu/lib/libm.so.6 /usr/aarch64-linux-gnu/lib/libresolv.so.2 "$(dirname "$INTERP_PATH")/"
+
+          # GuestProgramLauncherComponent.java (execGuestProgram) always sets
+          # LD_LIBRARY_PATH=<rootfs>/usr/lib in the *process environment* of
+          # the whole command it launches (rootFS.getLibDir(), confirmed by
+          # reading the Java source directly), not just as a loader argument.
+          # posix_spawn() inherits the parent's environment by default, so
+          # Box64's own internal recursive self-relaunch (for wineserver)
+          # inherits this same LD_LIBRARY_PATH automatically on a real
+          # device -- it never needs to be passed as an explicit -L/loader
+          # argument. Export it here too so this sanity check actually
+          # mirrors that real on-device process environment, instead of
+          # silently testing a plain exec with an *empty* environment (which
+          # is a stricter, unrealistic case that a stock ld-linux-aarch64.so.1
+          # can never satisfy, since it has no other way to find libc.so.6 at
+          # this non-standard path).
+          export LD_LIBRARY_PATH="$(dirname "$INTERP_PATH")"
           echo "Sanity check: plain exec (no -L, no loader indirection) under qemu-aarch64 emulation"
           qemu-aarch64-static ./box64 --version
 
