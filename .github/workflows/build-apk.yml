@@ -57,19 +57,91 @@ jobs:
             exit 1
           fi
 
+          # 0.25's fix above was confirmed working via a real on-device trace
+          # (hikari-startup-025.log): the 0x7ffe0000 conflict is gone. Startup
+          # then got further and failed differently: "wine: could not exec
+          # wineserver". Box64's own trace showed it tried 5 candidate paths,
+          # and even the objectively correct one -- .../opt/wine/bin/wineserver,
+          # confirmed to really exist in the bundled rootfs.tzst and recognized
+          # by Box64 as a valid x86_64 ELF ("IsX64=1") -- still failed with
+          # "posix_spawn returned 2" (ENOENT).
+          #
+          # Reading Box64's own source (src/wrapped/wrappedlibc.c,
+          # my_posix_spawn) explains why: to launch another x86_64 program,
+          # Box64 recursively re-execs *itself*
+          # (posix_spawn(box64path, [box64path, target, ...])) so the new
+          # process can also translate that target. box64path is just Box64's
+          # own on-disk path (core.c: ResolveFile(argv[0], ...)).
+          #
+          # A stock cross-compile of this binary is a normal dynamically
+          # linked ELF whose recorded ELF interpreter (its PT_INTERP,
+          # "Requesting program interpreter" in readelf -l) is a generic
+          # build-time default (/lib/ld-linux-aarch64.so.1) that does not
+          # exist anywhere on a real Android device's actual filesystem root
+          # -- a plain execve() of it fails outright with ENOENT on the
+          # interpreter. HikariLauncherActivity's Java code (since 0.15)
+          # already works around exactly this for the *first* launch, by
+          # searching the extracted rootfs for a real ld-linux-aarch64.so.1
+          # and invoking Box64 explicitly through it -- but Box64's own
+          # internal recursive self-relaunch for wineserver has no such
+          # workaround: it is a plain, direct exec of the Box64 binary, so it
+          # hits the exact same missing-interpreter problem all over again.
+          # This was verified end to end in a local sandbox (a small C
+          # program mirroring Box64's own resolve+posix_spawn(self) logic
+          # reproduced the identical failure class, and stopped failing once
+          # rebuilt with its interpreter linked directly to the real absolute
+          # on-device path).
+          #
+          # The fix: bake that exact absolute path into Box64's own ELF
+          # interpreter at link time, so *every* exec of Box64 -- the first
+          # one from Java, and any later recursive one Box64 does internally
+          # -- resolves correctly with no loader indirection needed. This is
+          # exactly what the *original* bundled Winlator box64-0.4.4.tzst
+          # asset already did for its own applicationId (readelf on it shows
+          # interpreter /data/data/com.winlator/files/rootfs/lib/ld-linux-aarch64.so.1)
+          # -- our own builds simply never matched that convention for our
+          # own applicationId (com.hikariro.mobile) until now. RootFS.java
+          # extracts to <filesDir>/rootfs, and the rootfs bundle's real ARM64
+          # loader lives at usr/lib/ld-linux-aarch64.so.1 (confirmed by
+          # listing the actual rootfs.tzst asset), so:
+          INTERP_PATH="/data/user/0/com.hikariro.mobile/files/rootfs/usr/lib/ld-linux-aarch64.so.1"
+
+          # -DWINLATOR_GLIBC=ON is Box64's own official build option for
+          # exactly this scenario ("Set to ON if targeting an Android device
+          # with Winlator Glibc") -- unrelated to the interpreter fix above,
+          # but clearly the intended flag for this target and not previously
+          # set by 0.24/0.25, so it is enabled now too.
           mkdir build && cd build
           cmake .. \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-            -DARM64=ON -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+            -DARM64=ON -DARM_DYNAREC=ON -DWINLATOR_GLIBC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_EXE_LINKER_FLAGS="-Wl,--dynamic-linker=${INTERP_PATH}"
           make -j"$(nproc)"
           aarch64-linux-gnu-strip box64
           file box64
 
-          echo "Sanity check: run the freshly built (patched) box64 under qemu-aarch64 emulation"
-          qemu-aarch64-static -L /usr/aarch64-linux-gnu ./box64 --version
+          echo "Sanity check: verify the baked-in on-device interpreter path"
+          readelf -l box64 | grep -A1 "program interpreter"
+          if ! readelf -l box64 | grep -q "$INTERP_PATH"; then
+            echo "ERROR: box64 was not linked with the expected on-device interpreter path" >&2
+            exit 1
+          fi
+
+          # Recreate the exact absolute path on the runner (the real device's
+          # own filesystem root will really have this, once the app is
+          # installed and its rootfs is extracted -- see RootFS.java) so this
+          # check proves a *plain* exec works with no -L sysroot override and
+          # no explicit loader indirection, exactly mirroring how a real,
+          # unsandboxed exec (including Box64's own internal recursive one)
+          # will resolve it on-device.
+          sudo mkdir -p "$(dirname "$INTERP_PATH")"
+          sudo cp /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 "$INTERP_PATH"
+          sudo cp /usr/aarch64-linux-gnu/lib/libc.so.6 /usr/aarch64-linux-gnu/lib/libm.so.6 /usr/aarch64-linux-gnu/lib/libresolv.so.2 "$(dirname "$INTERP_PATH")/"
+          echo "Sanity check: plain exec (no -L, no loader indirection) under qemu-aarch64 emulation"
+          qemu-aarch64-static ./box64 --version
 
           # Package into the exact same tar layout Winlator's own TarCompressorUtils
           # expects (./usr/local/bin/box64). File mode in the tar doesn't actually
@@ -167,6 +239,9 @@ jobs:
       - name: Apply 0.25 Box64 prereserve shrink version bump
         run: python3 scripts/patch_025_box64_prereserve_shrink.py
 
+      - name: Apply 0.26 Box64 interpreter path fix version bump
+        run: python3 scripts/patch_026_box64_interp_fix.py
+
       - name: Build ARM64 private APK
         working-directory: winlator/app
         run: |
@@ -174,12 +249,12 @@ jobs:
           ./gradlew --no-daemon assembleDebug
 
       - name: Rename APK
-        run: cp winlator/app/app/build/outputs/apk/debug/app-debug.apk HikariRO-Mobile-0.25-beta.apk
+        run: cp winlator/app/app/build/outputs/apk/debug/app-debug.apk HikariRO-Mobile-0.26-beta.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HikariRO-Mobile-0.25-beta
-          path: HikariRO-Mobile-0.25-beta.apk
+          name: HikariRO-Mobile-0.26-beta
+          path: HikariRO-Mobile-0.26-beta.apk
           if-no-files-found: error
           retention-days: 30
