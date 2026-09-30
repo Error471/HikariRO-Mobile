@@ -9,4 +9,4 @@
 - Sin probar todavía en el móvil.
 
 ## Nombre
-- `app_name` = "HikariRO" en `values`, `values-pt` y `values-ru` (en pt/ru seguía "Winlator"); también los textos de la notificación en pt/ru.
+- `app_name` = "HikariRO"
