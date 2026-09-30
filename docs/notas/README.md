@@ -9,5 +9,3 @@ Registro de los problemas encontrados y cómo se resolvieron, en orden cronológ
 5. `05-compatibilidad-segundo-plano-controles.md`: modos gráficos por móvil, segundo plano, menú, páginas de atajos, límite de FPS, limpieza de Winlator.
 6. `06-cliente-limpio-release-v2.md`: cliente limpio en el release `v2-client` y `manifest.json`.
 7. `07-setup-y-nombre.md`: diálogo "Ragnarok Setup" automático y nombre de la app.
-
-Las rutas `E:\Descargas\HikariRO_Mobile\...` son las del PC donde se desarrolló; en este repositorio los scripts están en `scripts/` y los ayudantes en `hikari_tools/`.
