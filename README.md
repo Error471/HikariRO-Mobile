@@ -1,23 +1,10 @@
 # HikariRO Mobile
 
-Private Android prototype for running the Windows HikariRO client through a
-customized Winlator environment.
+Ficheros de descarga del cliente de HikariRO para la app HikariRO Movil (Android).
 
-The APK does not bundle the game client. On first launch it downloads
-`HikariRO Full.zip` from the official HikariRO website, resumes interrupted
-downloads, extracts the client, creates a 960x540 container, and starts
-`raghikari.exe`.
+Los ficheros del cliente estan en el release **v2-client**:
+https://github.com/Error471/HikariRO-Mobile/releases/tag/v2-client
 
-## Test target
-
-- Samsung Galaxy A25 5G
-- Android 16
-- 8 GB RAM
-- Mali-G68 GPU
-
-## Build
-
-GitHub Actions builds a private debug-signed ARM64 APK from the official
-Winlator source and applies the HikariRO customization during CI.
-
-Winlator and the retained upstream code are licensed under LGPL-2.1.
+- `manifest.json`: lista de ficheros que descarga la app.
+- `data.grf.part1..3`: data.grf partido en trozos (GitHub limita cada fichero a 2 GB).
+- `hikariro_client_01..03.zip`: resto del cliente.
