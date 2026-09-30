@@ -1,0 +1,58 @@
+apply plugin: 'com.android.application'
+
+// URL de descarga del cliente: se cambia con cambiar_repo_descarga.ps1 (sin tocar el codigo)
+def hikariProps = new Properties()
+def hikariPropsFile = rootProject.file('hikari.properties')
+if (hikariPropsFile.isFile()) hikariPropsFile.withInputStream { hikariProps.load(it) }
+def hikariDownloadUrl = hikariProps.getProperty('download_base_url', 'https://github.com/Error471/hikariro-mobile/releases/download/v2-client/').trim()
+
+android {
+    namespace 'com.winlator'
+    compileSdk 35
+
+    defaultConfig {
+        // applicationId propio (distinto de 'com.winlator') para que esta
+        // app se instale como una app independiente, sin chocar con una
+        // instalacion existente de Winlator en el mismo telefono.
+        applicationId 'com.hikarimovil.launcher'
+        minSdkVersion 26
+        targetSdkVersion 28
+        versionCode 1
+        versionName "1.0"
+        resValue 'string', 'hikari_download_base_url', hikariDownloadUrl
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+
+            ndk {
+                abiFilters 'arm64-v8a'
+            }
+        }
+    }
+
+    lintOptions {
+        checkReleaseBuilds false
+    }
+
+    ndkVersion '24.0.8215888'
+
+    externalNativeBuild {
+        cmake {
+            version '3.22.1'
+            path 'src/main/cpp/CMakeLists.txt'
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.4.0'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'com.google.android.material:material:1.4.0'
+    implementation 'com.github.luben:zstd-jni:1.5.2-3@aar'
+    implementation 'org.tukaani:xz:1.7'
+    implementation 'org.apache.commons:commons-compress:1.20'
+    implementation 'androidx.lifecycle:lifecycle-process:2.5.1'
+}

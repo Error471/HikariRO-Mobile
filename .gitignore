@@ -1,0 +1,21 @@
+# Android Studio / Gradle
+*.iml
+.gradle/
+.idea/
+.kotlin/
+local.properties
+/build/
+/app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+*.apk
+*.aab
+*.jks
+*.keystore
+.DS_Store
+
+# Generados por los scripts (el cliente va en el release, no en el codigo)
+/logs/
+/release_parts/
