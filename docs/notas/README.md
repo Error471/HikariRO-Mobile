@@ -9,3 +9,4 @@ Registro de los problemas encontrados y cómo se resolvieron, en orden cronológ
 5. `05-compatibilidad-segundo-plano-controles.md`: modos gráficos por móvil, segundo plano, menú, páginas de atajos, límite de FPS, limpieza de Winlator.
 6. `06-cliente-limpio-release-v2.md`: cliente limpio en el release `v2-client` y `manifest.json`.
 7. `07-setup-y-nombre.md`: diálogo "Ragnarok Setup" automático y nombre de la app.
+8. `08-patcher-access-violation.md`: error "Access violation" del patcher al aplicar parches en algunos móviles (ajustes de Box64 por programa).

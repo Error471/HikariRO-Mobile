@@ -57,6 +57,12 @@ Notas:
 
 Tras compilarlos, copia el `.exe` a `app/src/main/assets/hikari/`.
 
+## Descargar la APK
+
+- Última APK: https://github.com/Error471/HikariRO-Mobile/releases/download/app/HikariRO.apk
+- Para publicar una nueva: compilar y ejecutar `scripts/subir_apk.ps1` (la sube al release `app` con el mismo nombre, así el enlace no cambia).
+- Es una APK de depuración firmada con la clave del PC que la compila: si otra persona compila y publica, quien la tenga instalada tendrá que desinstalar antes de instalar la nueva.
+
 ## Cliente del juego (descarga)
 
 El cliente **no** está en el código: está en el release [`v2-client`](https://github.com/Error471/HikariRO-Mobile/releases/tag/v2-client) de este repositorio.
