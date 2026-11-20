@@ -1173,7 +1173,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         rootView.addView(xServerView);
 
         globalCursorSpeed = preferences.getFloat("cursor_speed", 1.0f);
-        capturePointerOnExternalMouse = preferences.getBoolean("capture_pointer_on_external_mouse", true);
+        // HikariRO: raton fisico en modo absoluto (la captura de Android no gira los ejes en horizontal)
+        capturePointerOnExternalMouse = !isHikariContainer() && preferences.getBoolean("capture_pointer_on_external_mouse", true);
         touchpadView = new TouchpadView(this, xServer, capturePointerOnExternalMouse);
         touchpadView.setSensitivity(globalCursorSpeed);
         touchpadView.setMoveCursorToTouchpoint(preferences.getBoolean("move_cursor_to_touchpoint", false));
@@ -1196,6 +1197,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         setupLoadingOverlay(rootView);
 
         if (isHikariContainer()) {
+            // Sin flecha de Android encima del juego: se ve solo el cursor del juego
+            android.view.PointerIcon noPointer = android.view.PointerIcon.getSystemIcon(this, android.view.PointerIcon.TYPE_NULL);
+            touchpadView.setPointerIcon(noPointer);
+            inputControlsView.setPointerIcon(noPointer);
+            xServerView.setPointerIcon(noPointer);
             touchpadView.setLongPressDragEnabled(true);
             touchpadView.setPinchZoomEnabled(true);
             inputControlsView.setHikariStyle(true);
